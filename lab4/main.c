@@ -1,7 +1,9 @@
 #include "main.h"
 
 #define COLOR_COUNT 3
-#define PERIOD 2000 / 100 - 1
+
+/* TIM_Period = tim_freq / pwm_freq - 1 */
+#define PERIOD 500 / 1 - 1
 
 /* global LED-switching vars */
 static int k, pin_color, prev_color, tim_pulse;
@@ -14,12 +16,12 @@ void LEDs_Init(void)
   RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOA, ENABLE);
 
   /* Alternating functions for pins */
-  GPIO_PinAFConfig(GPIOA, GPIO_Pin_8, GPIO_AF_TIM4);
-  GPIO_PinAFConfig(GPIOA, GPIO_Pin_9, GPIO_AF_TIM4);
+  //GPIO_PinAFConfig(GPIOA, GPIO_Pin_8, GPIO_AF_TIM4);
+  //GPIO_PinAFConfig(GPIOA, GPIO_Pin_9, GPIO_AF_TIM4);
   GPIO_PinAFConfig(GPIOA, GPIO_Pin_10, GPIO_AF_TIM4);
 
   /* Init LEDs */
-  GPIO_InitStructure.GPIO_Pin   = GPIO_Pin_8 | GPIO_Pin_9 | GPIO_Pin_10;
+  GPIO_InitStructure.GPIO_Pin   = /*GPIO_Pin_8 | GPIO_Pin_9 |*/ GPIO_Pin_10;
   GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
   GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
   GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
@@ -93,8 +95,6 @@ void Timer_Init(void)
   TIM_TimeBaseInitTypeDef tim_struct;
   /* tim4 def_tim_freq = 84 000 000 */
   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM4, ENABLE);
-  /* TIM_Period = tim_freq / pwm_freq - 1
-     pwm_freq = xHz */  
   tim_struct.TIM_Period = PERIOD;
   /* tim_freq = tim_clk / psc */
   tim_struct.TIM_Prescaler = 42000;
@@ -119,15 +119,15 @@ void Timer_PWM_Init(void)
   TIM_OC1Init(TIM4, &tim_oc_struct);
   TIM_OC1PreloadConfig(TIM4, TIM_OCPreload_Enable);
   /*  
-  tim_oc_struct.TIM_Pulse = 999; // 50% duty cycle 
+  tim_oc_struct.TIM_Pulse = PERIOD / 2; // 50% duty cycle 
   TIM_OC2Init(TIM4, &tim_oc_struct);
   TIM_OC2PreloadConfig(TIM4, TIM_OCPreload_Enable);
     
-  tim_oc_struct.TIM_Pulse = 1499; // 75% duty cycle
+  tim_oc_struct.TIM_Pulse = PERIOD / 4 * 3; // 75% duty cycle
   TIM_OC3Init(TIM4, &tim_oc_struct);
   TIM_OC3PreloadConfig(TIM4, TIM_OCPreload_Enable);
     
-  tim_oc_struct.TIM_Pulse = 1999; // 100% duty cycle
+  tim_oc_struct.TIM_Pulse = PERIOD; // 100% duty cycle
   TIM_OC4Init(TIM4, &tim_oc_struct);
   TIM_OC4PreloadConfig(TIM4, TIM_OCPreload_Enable);
   */
@@ -137,9 +137,9 @@ void EXTI0_IRQHandler(void)
 {
   if (EXTI_GetITStatus(EXTI_Line0) != RESET)
   {
-    if (tim_pulse < PERIOD) 
+    if (tim_pulse > 0) 
     {
-      tim_pulse -= PERIOD / 10;
+      tim_pulse -= PERIOD / 4;
       TIM4->CCR1 = tim_pulse;
     }
     EXTI_ClearITPendingBit(EXTI_Line0);
@@ -150,6 +150,7 @@ void EXTI1_IRQHandler(void)
 {
   if (EXTI_GetITStatus(EXTI_Line1) != RESET)
   {
+    /*
     // turn off the old color and turn on the new one
     GPIO_ToggleBits(GPIOA, prev_color);
     GPIO_ToggleBits(GPIOA, pin_color);
@@ -157,13 +158,13 @@ void EXTI1_IRQHandler(void)
     prev_color = pin_color;
     pin_color = GPIO_Pin_8 << k;
     k = (k + 1) % COLOR_COUNT;    
-    /*
-    if (tim_pulse > 0) 
+    */
+    if (tim_pulse < PERIOD) 
     {
-      tim_pulse -= PERIOD / 10;
+      tim_pulse += PERIOD / 4;
       TIM4->CCR1 = tim_pulse;
     }
-    */
+    
     EXTI_ClearITPendingBit(EXTI_Line1);
   }
 }
@@ -178,11 +179,6 @@ int main(void)
   prev_color = pin_color;
   
   LEDs_Init();
-  /* Turn all the leds off */
-  //GPIO_SetBits(GPIOA, GPIO_Pin_8 | GPIO_Pin_9 | GPIO_Pin_10);
-  /* Turn blue on */
-  //GPIO_ResetBits(GPIOA, GPIO_Pin_10);
-
   Buttons_Init();
   Timer_Init();
   Timer_PWM_Init();
